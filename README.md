@@ -328,6 +328,14 @@ docker build -t ecommerce-frontend:local ./frontend
 
 The frontend Nginx configuration routes requests under `/api/auth` and `/api/users` to the user service, `/api/products` and `/api/categories` to the product service, `/api/cart` to the cart service, and `/api/orders` and `/api/payments` to the order service.
 
+docker network create ecommerce-test-network
+
+docker run -d --name ecommerce-user --network ecommerce-test-network -p 3001:3001 ecommerce-user-service:local
+docker run -d --name ecommerce-product --network ecommerce-test-network -p 3002:3002 ecommerce-product-service:local
+docker run -d --name ecommerce-cart --network ecommerce-test-network -p 3003:3003 ecommerce-cart-service:local
+docker run -d --name ecommerce-order --network ecommerce-test-network -p 3004:3004 ecommerce-order-service:local
+docker run -d --name ecommerce-frontend --network ecommerce-test-network -p 8088:80 ecommerce-frontend:local
+
 For this routing to work, the containers must be connected to a Docker network and use the service names configured in `frontend/nginx/default.conf`.
 
 The Dockerfiles and Nginx configuration are included in the repository. A Docker Compose configuration is not currently included.
@@ -371,3 +379,75 @@ For support and questions:
 - **Admin Dashboard**: Administrative interface
 - **Analytics**: Order and user analytics
 - **Payment Integration**: Real payment gateway integration
+
+
+## Docker Deployment
+
+The E-Commerce Store application has been enhanced with Docker containerization to support running the frontend and backend microservices independently.
+
+### Dockerized Services
+
+The following Docker containers have been configured:
+
+| Service | Docker Container | Port |
+|---|---|---|
+| Frontend | `ecommerce-frontend` | `8088:80` |
+| User Service | `ecommerce-user` | `3001:3001` |
+| Product Service | `ecommerce-product` | `3002:3002` |
+| Cart Service | `ecommerce-cart` | `3003:3003` |
+| Order Service | `ecommerce-order` | `3004:3004` |
+
+All five application containers are connected to the `ecommerce-test-network` Docker network, enabling communication between the frontend and backend services.
+
+<img width="1365" height="624" alt="Screenshot 2026-10-17 202553" src="https://github.com/user-attachments/assets/97e11a0c-ef80-429d-b669-3b6ce31a0a32" />
+
+
+### Technologies Used
+
+- Docker
+- Node.js
+- Nginx
+- React
+- Terraform
+- AWS EC2 configuration
+- Git and GitHub
+
+### Dockerfiles and .dockerignore
+
+Dockerfiles have been added for all four backend services and the frontend.
+
+The backend Dockerfiles use `node:20-alpine` as the base image and install production dependencies before starting their respective Node.js applications.
+
+The frontend uses a multi-stage Docker build:
+1. Builds the React application using Node.js.
+2. Copies the production build into an Nginx container.
+3. Serves the frontend using Nginx on port 80.
+
+Separate `.dockerignore` files have been added to exclude unnecessary files such as `node_modules`, environment files, build artifacts, Git metadata, and log files from Docker build contexts.
+
+### Nginx Reverse Proxy Configuration
+
+The file `frontend/nginx/default.conf` configures Nginx to serve the React frontend and route API requests to the appropriate backend containers.
+
+| API Route | Target Service |
+|---|---|
+| `/api/auth` | User Service |
+| `/api/users` | User Service |
+| `/api/products` | Product Service |
+| `/api/categories` | Product Service |
+| `/api/cart` | Cart Service |
+| `/api/orders` | Order Service |
+| `/api/payments` | Order Service |
+
+The frontend uses relative API URLs, allowing requests to pass through the Nginx reverse proxy rather than relying on hard-coded localhost ports.
+
+### Running the Application
+
+The following commands build the Docker images from the project root directory in PowerShell:
+
+```powershell
+docker build -t ecommerce-user-service:local ./backend/user-service
+docker build -t ecommerce-product-service:local ./backend/product-service
+docker build -t ecommerce-cart-service:local ./backend/cart-service
+docker build -t ecommerce-order-service:local ./backend/order-service
+docker build -t ecommerce-frontend:local ./frontend
