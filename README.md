@@ -298,20 +298,45 @@ curl http://localhost:3002/api/categories
 5. **Monitoring**: Add logging and monitoring solutions
 6. **Security**: Implement rate limiting, CORS, and other security measures
 
-### Docker Deployment (Future Enhancement)
+### Docker Deployment
 
-Each service can be containerized with Docker:
+The project includes Dockerfiles for all four backend microservices and the React frontend. The frontend is served through Nginx, which proxies API requests to the appropriate backend containers.
 
-```dockerfile
-# Example Dockerfile for a service
-FROM node:16-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --production
-COPY . .
-EXPOSE 3001
-CMD ["npm", "start"]
+#### Docker Components
+
+| Component | Container port |
+|---|---:|
+| User Service | 3001 |
+| Product Service | 3002 |
+| Cart Service | 3003 |
+| Order Service | 3004 |
+| Frontend (Nginx) | 80 |
+
+#### Build the Images
+
+Run the following commands from the repository root. Each command uses the corresponding service directory as its Docker build context.
+
+```powershell
+docker build -t ecommerce-user-service:local ./backend/user-service
+docker build -t ecommerce-product-service:local ./backend/product-service
+docker build -t ecommerce-cart-service:local ./backend/cart-service
+docker build -t ecommerce-order-service:local ./backend/order-service
+docker build -t ecommerce-frontend:local ./frontend
 ```
+
+#### Container Networking
+
+The frontend Nginx configuration routes requests under `/api/auth` and `/api/users` to the user service, `/api/products` and `/api/categories` to the product service, `/api/cart` to the cart service, and `/api/orders` and `/api/payments` to the order service.
+
+For this routing to work, the containers must be connected to a Docker network and use the service names configured in `frontend/nginx/default.conf`.
+
+The Dockerfiles and Nginx configuration are included in the repository. A Docker Compose configuration is not currently included.
+
+#### Terraform Deployment Configuration
+
+The `terraform/` directory contains Terraform configuration for an optional AWS deployment in the Mumbai region (`ap-south-1`). The configuration describes a VPC, public subnet, security group, and EC2 instance.
+
+**Important:** Terraform deployment is optional and can incur AWS charges. Review the configuration and costs before deploying. Do not commit Terraform state files, state backups, credentials, or secret variable files.
 
 ## 🤝 Contributing
 

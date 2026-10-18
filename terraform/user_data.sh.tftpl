@@ -1,0 +1,92 @@
+#!/bin/bash
+set -euxo pipefail
+
+exec > >(tee -a /var/log/ecommerce-setup.log) 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y docker.io curl
+
+systemctl enable --now docker
+
+# Create a private network for the application containers
+docker network create ecommerce-network || true
+
+# Start MongoDB on the internal Docker network only
+docker run -d \
+  --name ecommerce-mongodb \
+  --restart unless-stopped \
+  --network ecommerce-network \
+  -e MONGO_INITDB_DATABASE=ecommerce \
+  mongo:7
+
+# Wait for MongoDB to become ready
+MONGO_READY=false
+
+for attempt in $(seq 1 30); do
+  if docker exec ecommerce-mongodb mongosh --quiet \
+    --eval 'db.adminCommand({ping: 1}).ok' 2>/dev/null | grep -q 1; then
+    MONGO_READY=true
+    echo "MongoDB is ready."
+    break
+  fi
+  echo "Waiting for MongoDB... attempt $attempt of 30"
+  sleep 5
+done
+
+if [ "$MONGO_READY" != "true" ]; then
+  echo "ERROR: MongoDB did not become ready. Stopping setup."
+  exit 1
+fi
+
+# Pull the application images from Docker Hub
+docker pull ${dockerhub_username}/ecommerce-user-service:latest
+docker pull ${dockerhub_username}/ecommerce-product-service:latest
+docker pull ${dockerhub_username}/ecommerce-cart-service:latest
+docker pull ${dockerhub_username}/ecommerce-order-service:latest
+docker pull ${dockerhub_username}/ecommerce-frontend:latest
+
+# Start the four backend services
+docker run -d \
+  --name ecommerce-user \
+  --restart unless-stopped \
+  --network ecommerce-network \
+  -e PORT=3001 \
+  -e MONGODB_URI=mongodb://ecommerce-mongodb:27017/ecommerce_users \
+  ${dockerhub_username}/ecommerce-user-service:latest
+
+docker run -d \
+  --name ecommerce-product \
+  --restart unless-stopped \
+  --network ecommerce-network \
+  -e PORT=3002 \
+  -e MONGODB_URI=mongodb://ecommerce-mongodb:27017/ecommerce_products \
+  ${dockerhub_username}/ecommerce-product-service:latest
+
+docker run -d \
+  --name ecommerce-cart \
+  --restart unless-stopped \
+  --network ecommerce-network \
+  -e PORT=3003 \
+  -e MONGODB_URI=mongodb://ecommerce-mongodb:27017/ecommerce_carts \
+  ${dockerhub_username}/ecommerce-cart-service:latest
+
+docker run -d \
+  --name ecommerce-order \
+  --restart unless-stopped \
+  --network ecommerce-network \
+  -e PORT=3004 \
+  -e MONGODB_URI=mongodb://ecommerce-mongodb:27017/ecommerce_orders \
+  ${dockerhub_username}/ecommerce-order-service:latest
+
+# Start the frontend; Nginx proxies API requests to backend containers
+docker run -d \
+  --name ecommerce-frontend \
+  --restart unless-stopped \
+  --network ecommerce-network \
+  -p 80:80 \
+  ${dockerhub_username}/ecommerce-frontend:latest
+
+# Record initial container status for troubleshooting
+docker ps -a
